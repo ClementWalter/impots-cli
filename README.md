@@ -42,7 +42,7 @@ Il faut [uv](https://docs.astral.sh/uv/) et Google Chrome.
 ```bash
 impots whoami
 impots documents --year 2026
-impots download --all                    # ~/Downloads/impots/<année>/<libellé>.pdf
+impots download --all                    # ~/Downloads/impots/<année>/<Libellé>.pdf, idempotent
 impots messages
 impots message 1234567890 --save
 impots topics

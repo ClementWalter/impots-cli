@@ -108,12 +108,27 @@ def _iso(ddmmyyyy: str | None) -> str | None:
 
 
 def slugify(label: str) -> str:
-    """File-system safe name that keeps the label readable."""
+    """ASCII file-system safe name (for uploads and `--ascii` names)."""
     # Typographic apostrophes and dashes separate words; NFKD would drop them.
     s = re.sub(r"[’‘`´–—]", " ", label)
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     s = re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_")
     return s[:120] or "document"
+
+
+def readable_name(label: str, description: str = "") -> str:
+    """Human file name: the label, plus the property address when there is one.
+
+    Only characters that break paths on macOS, Windows or Drive are replaced.
+    """
+    first = description.split(" | ", 1)[0] if description else ""
+    if first and not first.lower().startswith("date limite"):
+        label = f"{label} - {first}"
+    s = re.sub(r"(\d{1,2}):(\d{2})", r"\1h\2", label.replace("/", "-"))
+    s = re.sub(r"\s*:\s*", " - ", s)
+    s = re.sub(r'[\\*?"<>|]', "", s)
+    s = re.sub(r"\s+", " ", s).strip(" .")
+    return s[:150] or "document"
 
 
 def doc_id(token: str) -> str:
@@ -125,7 +140,9 @@ def parse_documents(html: str) -> list[dict]:
     """Documents of documents.do, all years, deduplicated, page order kept.
 
     The page renders every year twice (tabs and accordions); the year
-    accordions are the `div.fr-collapse` whose id is the year.
+    accordions are the `div.fr-collapse` whose id is the year. A main document
+    is a link; its linked documents (accusé de réception, annexes, one avis
+    per property) are GET forms carrying the `idEnsua` token.
     """
     soup = BeautifulSoup(html, "html.parser")
     out: list[dict] = []
@@ -135,23 +152,38 @@ def parse_documents(html: str) -> list[dict]:
         if not re.fullmatch(r"\d{4}", year):
             continue
         names: dict[str, int] = {}
-        for a in year_div.select('a[href*="Affichage_Document_PDF?idEnsua="]'):
-            token = a["href"].split("idEnsua=", 1)[1]
-            if token in seen:
+        for el in year_div.find_all(["a", "form"]):
+            if el.name == "a" and "Affichage_Document_PDF?idEnsua=" in (el.get("href") or ""):
+                token = el["href"].split("idEnsua=", 1)[1]
+                label = _clean(el.get_text(" "))
+                card = el.find_parent(class_="fr-card")
+                desc_el = card.select_one(".fr-card__desc") if card else None
+                linked = False
+            elif el.name == "form" and el.get("action") == "Affichage_Document_PDF":
+                inp = el.select_one('input[name="idEnsua"]')
+                if inp is None:
+                    continue
+                token = inp["value"]
+                card = el.find_parent(class_="fr-card")
+                title = card.select_one('p[id^="titreLie"]') if card else None
+                label = _clean(title.get_text(" ")) if title else ""
+                desc_el = card.select_one("p.fr-text--sm") if card else None
+                linked = True
+            else:
+                continue
+            if token in seen or not label:
                 continue
             seen.add(token)
-            label = _clean(a.get_text(" "))
-            card = a.find_parent(class_="fr-card")
-            desc_el = card.select_one(".fr-card__desc") if card else None
             desc = _clean(desc_el.get_text(" | ")) if desc_el else ""
-            base = slugify(label)
+            base = readable_name(label, desc)
             names[base] = names.get(base, 0) + 1
-            fname = base if names[base] == 1 else f"{base}_{names[base]}"
+            fname = base if names[base] == 1 else f"{base} ({names[base]})"
             out.append({
                 "id": doc_id(token),
                 "year": int(year),
                 "label": label,
                 "description": desc,
+                "linked": linked,
                 "file": f"{year}/{fname}.pdf",
                 "token": token,
             })

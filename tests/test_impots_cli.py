@@ -47,6 +47,17 @@ DOCS_HTML = """
   <div class="fr-card"><h3><a href="Affichage_Document_PDF?idEnsua=BBBB2222">Lettre de relance taxes foncières</a></h3></div>
   <div class="fr-card"><h3><a href="Affichage_Document_PDF?idEnsua=CCCC3333">Lettre de relance taxes foncières</a></h3></div>
   <div class="fr-card"><h3><a href="Affichage_Document_PDF?idEnsua=DDDD4444">Impôt sur les revenus 2023 – Montant de l’avance</a></h3></div>
+  <div class="fr-collapse" id="collapseGridRwd-3-1">
+   <div class="fr-card fr-card--horizontal"><div class="fr-card__desc">
+    <p id="titreLieRwd-3-1-1" class="fr-text--lg"> Avis de taxes foncières 2024</p>
+    <p class="fr-text--sm">1 RUE DE L'EXEMPLE, 00000 VILLE<br>Date limite de paiement&nbsp;: 15/10/2024</p></div>
+    <form action="Affichage_Document_PDF" method="GET"><input type="hidden" name="idEnsua" value="EEEE5555"><button title="Visualiser"></button></form>
+   </div>
+   <div class="fr-card fr-card--horizontal"><div class="fr-card__desc">
+    <p id="titreLieRwd-3-1-2"> Accusé de réception de télédéclaration des revenus 2023</p></div>
+    <form action="Affichage_Document_PDF" method="GET"><input type="hidden" name="idEnsua" value="FFFF6666"></form>
+   </div>
+  </div>
  </div></section>
  <section class="fr-accordion"><div class="fr-collapse" id="2018"></div></section>
 </div>
@@ -162,11 +173,23 @@ def topics():
 # --- documents -------------------------------------------------------------
 
 def test_documents_deduplicated_across_tabs_and_nested_groups(docs):
-    assert len(docs) == 4
+    assert len(docs) == 6
 
 
 def test_documents_year_from_accordion(docs):
-    assert [d["year"] for d in docs] == [2026, 2024, 2024, 2024]
+    assert [d["year"] for d in docs] == [2026, 2024, 2024, 2024, 2024, 2024]
+
+
+def test_linked_document_from_form(docs):
+    assert docs[4]["file"] == "2024/Avis de taxes foncières 2024 - 1 RUE DE L'EXEMPLE, 00000 VILLE.pdf"
+
+
+def test_linked_document_flag(docs):
+    assert [d["linked"] for d in docs] == [False, False, False, False, True, True]
+
+
+def test_linked_document_without_description(docs):
+    assert docs[5]["label"] == "Accusé de réception de télédéclaration des revenus 2023"
 
 
 def test_documents_description_joins_lines(docs):
@@ -175,9 +198,23 @@ def test_documents_description_joins_lines(docs):
 
 def test_documents_duplicate_labels_get_numbered_files(docs):
     assert [d["file"] for d in docs[1:3]] == [
-        "2024/Lettre_de_relance_taxes_foncieres.pdf",
-        "2024/Lettre_de_relance_taxes_foncieres_2.pdf",
+        "2024/Lettre de relance taxes foncières.pdf",
+        "2024/Lettre de relance taxes foncières (2).pdf",
     ]
+
+
+@pytest.mark.parametrize(("label", "desc", "name"), [
+    ("Déclaration en ligne des revenus 2025 (le 07/05/2026, à 13:27)", "",
+     "Déclaration en ligne des revenus 2025 (le 07-05-2026, à 13h27)"),
+    ("Déclaration des revenus 2016 : revenus non salariés", "",
+     "Déclaration des revenus 2016 - revenus non salariés"),
+    ("Avis de taxe d'habitation 2026", "1 RUE X, 00000 VILLE | Date limite de paiement : 15/12/2026",
+     "Avis de taxe d'habitation 2026 - 1 RUE X, 00000 VILLE"),
+    ("Avis d'impôt 2026", "Date limite de paiement : 15/09/2026", "Avis d'impôt 2026"),
+    ('Bad "name"?', "", "Bad name"),
+])
+def test_readable_name(label, desc, name):
+    assert ic.readable_name(label, desc) == name
 
 
 def test_documents_id_is_short_hash_of_token(docs):
@@ -388,7 +425,7 @@ class StubTab:
 def test_documents_json_parses(monkeypatch):
     monkeypatch.setattr(ic, "open_tab", lambda ctx: StubTab())
     res = CliRunner().invoke(ic.cli, ["documents", "--year", "2024", "--json"])
-    assert len(json.loads(res.output)) == 3
+    assert len(json.loads(res.output)) == 5
 
 
 def test_documents_json_hides_token(monkeypatch):

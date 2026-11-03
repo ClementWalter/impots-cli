@@ -21,8 +21,9 @@ session cookies and the trusted-device state between runs.
 - `impots login` opens the window on the login page and waits (default 300 s) until
   the person signs in (numéro fiscal + mot de passe, or FranceConnect). The person
   types the password; an agent never does.
-- The DGFiP session expires after inactivity (duration not measured), so expect to
-  ask for a re-login when a command has not run for a while.
+- The DGFiP session expires quickly when idle (observed: gone within the same
+  working session, exact duration not measured), so expect to ask the user for
+  `! impots login` before most runs.
 
 ## Output conventions
 
@@ -45,7 +46,7 @@ impots message 1234567890 1234567891 --json
 impots topics                              # subject codes for a new demande
 
 # Write
-impots download --all                      # → ~/Downloads/impots/<year>/<label>.pdf, skips existing
+impots download --all                      # → ~/Downloads/impots/<year>/<Libellé>.pdf, skips existing
 impots download --year 2025 -o ~/Taxes
 impots download 0123456789 abcdef0123      # by id from `impots documents`
 impots message 1234567890 --save           # + attachments and accusés de réception
@@ -72,7 +73,15 @@ impots login                               # terminal only: wait for a manual si
   (`cfspart-idp.impots.gouv.fr/GetContexte`), so everything goes through Chrome.
 - `documents.do?n=0` returns all years in one page (2017 onward); each year is
   rendered twice (tabs and accordions) and the parser deduplicates by token.
-  Measured: 40 documents downloaded in 12 s.
+  Linked documents (accusés de réception, annexes 2042-C/3916, one avis de taxe
+  foncière per property) are GET forms, not links; `linked: true` in `--json`.
+  Measured: 67 documents on one account, 40 main ones downloaded in 12 s.
+- File names are the readable label (accents kept, `/`→`-`, `13:27`→`13h27`, the
+  property address appended), so an archive made with `download --all -o DIR`
+  stays idempotent: reruns only fetch new documents.
+- The site regenerates PDFs on every download (a "Date de téléchargement" line,
+  internal timestamps): comparing an old copy with a fresh one needs the text,
+  not a hash.
 - Document ids are a hash of the site's `idEnsua` token. It was stable across
   requests within a session; whether it survives a new login has not been measured,
   so re-list before downloading by id in a new session.
