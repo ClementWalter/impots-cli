@@ -63,7 +63,10 @@ impots login                               # terminal only: wait for a manual si
   `impots messages --unread` and `impots message <id>`.
 - **Write to the tax office**: pick a code with `impots topics`, draft the text in a
   file, run `impots send … ` without `--yes`, show the recap to the user, and add
-  `--yes` only after they approve it.
+  `--yes` only after they approve it. `sent<TAB><id>` is printed only once the new
+  demande appears in « Mes échanges »; otherwise it exits 1 with "send NOT confirmed".
+  Never resend blindly on that error: have the user check the website first, since
+  the demande may have gone through anyway.
 - **Get the latest avis d'impôt**: `impots documents --match "^Avis d.impôt" --limit 1`
   then `impots download <id>`.
 

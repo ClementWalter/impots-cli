@@ -446,5 +446,65 @@ def test_download_unknown_id(monkeypatch):
     assert "unknown document id(s) ffffffffff" in res.output
 
 
+# --- send confirmation ------------------------------------------------------
+
+OLD_ROW = {"id": "1111111111", "service": "SIP EXEMPLE", "subject": "Ancienne demande"}
+NEW_ROW = {"id": "2222222222", "service": "SIP EXEMPLE", "subject": "Question sur l'impôt sur le revenu"}
+
+
+def test_new_demande_found():
+    assert ic.new_demande({"1111111111"}, [NEW_ROW, OLD_ROW]) == NEW_ROW
+
+
+def test_new_demande_none_when_list_unchanged():
+    assert ic.new_demande({"1111111111"}, [OLD_ROW]) is None
+
+
+class StubSendTab:
+    """Walks the send form: topic menu, empty extra fields, editor, recap, send button.
+
+    The page after the click echoes a 10-digit number from the body, like the real one can.
+    """
+
+    def ev(self, expr):
+        if "outerHTML" in expr:
+            return LIST_HTML
+        if "querySelectorAll('input" in expr:
+            return "[]"
+        if "innerText" in expr:
+            return "Récapitulatif … demande n° 9999999999 …"
+        return True
+
+    def wait_ajax(self):
+        pass
+
+
+@pytest.fixture
+def send_stubs(monkeypatch):
+    monkeypatch.setattr(ic, "open_tab", lambda ctx: StubSendTab())
+    monkeypatch.setattr(ic, "open_messagerie", lambda tab: None)
+    monkeypatch.setattr(ic, "SEND_CHECK_DELAY", 0)
+    return monkeypatch
+
+
+def test_send_unconfirmed_is_an_error(send_stubs):
+    send_stubs.setattr(ic, "load_all_demandes", lambda tab: [OLD_ROW])
+    res = CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
+    assert "send NOT confirmed" in res.output
+
+
+def test_send_unconfirmed_exit_code(send_stubs):
+    send_stubs.setattr(ic, "load_all_demandes", lambda tab: [OLD_ROW])
+    res = CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
+    assert res.exit_code == 1
+
+
+def test_send_confirmed_reports_new_demande_id(send_stubs):
+    lists = iter([[OLD_ROW], [OLD_ROW], [NEW_ROW, OLD_ROW]])
+    send_stubs.setattr(ic, "load_all_demandes", lambda tab: next(lists))
+    res = CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
+    assert res.output.strip() == "sent\t2222222222"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

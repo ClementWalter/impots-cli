@@ -66,6 +66,9 @@ CHROME_PATHS = [
 # Attachment rules stated by the messagerie form itself.
 ALLOWED_EXT = {".pdf", ".jpg", ".jpeg", ".tif", ".tiff", ".png", ".xls", ".xlsx", ".ods", ".odt"}
 MAX_ATTACH_BYTES = 20 * 1024 * 1024
+# A new demande can take a few seconds to show up in "Mes échanges".
+SEND_CHECKS = 5
+SEND_CHECK_DELAY = 3.0
 NOT_LOGGED = "Not signed in to impots.gouv.fr — run `impots login` and sign in in the Chrome window it opens."
 
 # Resolves once PrimeFaces' ajax queue is drained (the DOM is then up to date).
@@ -238,6 +241,14 @@ def parse_demandes(html: str) -> list[dict]:
             "unread": "WithUnreadMsg" in classes.replace("WithOutUnreadMsg", ""),
         })
     return out
+
+
+def new_demande(before: set[str], after: list[dict]) -> dict | None:
+    """The demande listed in `after` but not in `before`: the proof a send went through.
+
+    `after` is in "Mes échanges" order (latest first), so the first fresh row wins.
+    """
+    return next((d for d in after if d["id"] not in before), None)
 
 
 def _html_to_text(el) -> str:
@@ -860,6 +871,10 @@ def send(ctx, code: int, menu_id: str | None, body: str | None, body_file: Path 
 
     tab = open_tab(ctx)
     open_messagerie(tab)
+    # Snapshot taken before sending: a send counts only once a new demande shows up.
+    before = {d["id"] for d in load_all_demandes(tab)} if yes else set()
+    if yes:
+        open_messagerie(tab)
     entries = [t for t in parse_topics(tab.ev("document.documentElement.outerHTML")) if t["code"] == code]
     if menu_id:
         entries = [t for t in entries if t["menu_id"] == menu_id]
@@ -920,8 +935,24 @@ def send(ctx, code: int, menu_id: str | None, body: str | None, body_file: Path 
         tab.ev("document.getElementById('creatDmdBtnForm:creationDmdBtn').click()")
         tab.wait_ajax()
         page = tab.ev("(document.querySelector('#contenu')||document.body).innerText") or ""
-        m = re.search(r"\b(\d{10})\b", page)
-        result.update({"sent": True, "demande": m.group(1) if m else None, "confirmation": _clean(page)[:600]})
+        log.debug("page after send click: %s", _clean(page)[:600])
+        # The page text echoes the message body, so any number read from it is
+        # unreliable; the new row in "Mes échanges" is the only confirmation.
+        created = None
+        for attempt in range(SEND_CHECKS):
+            open_messagerie(tab)
+            created = new_demande(before, load_all_demandes(tab))
+            if created:
+                break
+            if attempt < SEND_CHECKS - 1:
+                time.sleep(SEND_CHECK_DELAY)
+        if not created:
+            raise click.ClickException(
+                "send NOT confirmed: no new demande appeared in « Mes échanges ». It may still "
+                "have gone through: check the website before sending again (duplicates are "
+                "possible). Run with --debug to see the page shown after the click.")
+        result.update({"sent": True, "demande": created["id"], "service": created["service"],
+                       "subject": created["subject"]})
 
     def render(r):
         if r["sent"]:
