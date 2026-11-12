@@ -69,6 +69,7 @@ MAX_ATTACH_BYTES = 20 * 1024 * 1024
 # A new demande can take a few seconds to show up in "Mes échanges".
 SEND_CHECKS = 5
 SEND_CHECK_DELAY = 3.0
+SEND_CONFIRM_BTN = "dlgFormValider:confirmerCreationDmdBtnDlg"
 NOT_LOGGED = "Not signed in to impots.gouv.fr — run `impots login` and sign in in the Chrome window it opens."
 
 # Resolves once PrimeFaces' ajax queue is drained (the DOM is then up to date).
@@ -934,6 +935,11 @@ def send(ctx, code: int, menu_id: str | None, body: str | None, body_file: Path 
     else:
         tab.ev("document.getElementById('creatDmdBtnForm:creationDmdBtn').click()")
         tab.wait_ajax()
+        # "Envoyer" only opens the "Confirmez-vous cet envoi ?" dialog; "Oui" sends.
+        if not _click_visible(tab, SEND_CONFIRM_BTN):
+            _abandon(tab)
+            raise click.ClickException("the send confirmation dialog did not open; nothing was sent.")
+        tab.wait_ajax()
         page = tab.ev("(document.querySelector('#contenu')||document.body).innerText") or ""
         log.debug("page after send click: %s", _clean(page)[:600])
         # The page text echoes the message body, so any number read from it is
@@ -961,6 +967,16 @@ def send(ctx, code: int, menu_id: str | None, body: str | None, body_file: Path 
             click.echo(f"DRY RUN (nothing sent) — topic {r['topic']}: {r['label']}")
             click.echo(r["recap"])
     emit(result, as_json, render)
+
+
+def _click_visible(tab: Tab, element_id: str, tries: int = 20) -> bool:
+    """Click `element_id` once it is displayed (dialogs open with an animation)."""
+    for _ in range(tries):
+        if tab.ev(f"(()=>{{const b=document.getElementById('{element_id}'); return !!(b && b.offsetParent);}})()"):
+            tab.ev(f"document.getElementById('{element_id}').click()")
+            return True
+        time.sleep(0.25)
+    return False
 
 
 def _abandon(tab: Tab) -> None:

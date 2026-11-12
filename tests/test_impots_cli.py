@@ -466,7 +466,15 @@ class StubSendTab:
     The page after the click echoes a 10-digit number from the body, like the real one can.
     """
 
+    def __init__(self, dialog=True):
+        self.dialog = dialog
+        self.clicked = []
+
     def ev(self, expr):
+        if "offsetParent" in expr and ic.SEND_CONFIRM_BTN in expr:
+            return self.dialog
+        if ".click()" in expr:
+            self.clicked.append(expr)
         if "outerHTML" in expr:
             return LIST_HTML
         if "querySelectorAll('input" in expr:
@@ -480,8 +488,13 @@ class StubSendTab:
 
 
 @pytest.fixture
-def send_stubs(monkeypatch):
-    monkeypatch.setattr(ic, "open_tab", lambda ctx: StubSendTab())
+def send_tab():
+    return StubSendTab()
+
+
+@pytest.fixture
+def send_stubs(monkeypatch, send_tab):
+    monkeypatch.setattr(ic, "open_tab", lambda ctx: send_tab)
     monkeypatch.setattr(ic, "open_messagerie", lambda tab: None)
     monkeypatch.setattr(ic, "SEND_CHECK_DELAY", 0)
     return monkeypatch
@@ -504,6 +517,20 @@ def test_send_confirmed_reports_new_demande_id(send_stubs):
     send_stubs.setattr(ic, "load_all_demandes", lambda tab: next(lists))
     res = CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
     assert res.output.strip() == "sent\t2222222222"
+
+
+def test_send_clicks_the_confirmation_yes(send_stubs, send_tab):
+    send_stubs.setattr(ic, "load_all_demandes", lambda tab: [OLD_ROW])
+    CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
+    assert any(ic.SEND_CONFIRM_BTN in c for c in send_tab.clicked)
+
+
+def test_send_without_confirmation_dialog_is_an_error(send_stubs, send_tab, monkeypatch):
+    send_tab.dialog = False
+    monkeypatch.setattr(ic.time, "sleep", lambda s: None)
+    send_stubs.setattr(ic, "load_all_demandes", lambda tab: [OLD_ROW])
+    res = CliRunner().invoke(ic.cli, ["send", "--topic", "43", "--body", "Bonjour", "--yes"])
+    assert "confirmation dialog did not open" in res.output
 
 
 if __name__ == "__main__":
