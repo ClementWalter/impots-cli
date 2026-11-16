@@ -2,8 +2,11 @@
 
 **Visibility: public.**
 
-**Extension: not shipped** as a Claude Desktop extension: it drives a dedicated
-debug Chrome window that the user signs into by hand.
+Also a Claude Desktop extension: download `impots-cli.mcpb` from the
+[latest release](https://github.com/ClementWalter/impots-cli/releases/latest)
+or from <https://clementwalter.github.io/claude-extensions/>. In Claude, ask to
+connect your impots.gouv.fr account: a Chrome window opens on the login page,
+sign in there.
 
 Ton **espace particulier impots.gouv.fr** depuis le terminal :
 
@@ -32,7 +35,7 @@ les cookies et l'appareil de confiance d'un lancement à l'autre.
 ```bash
 git clone https://github.com/ClementWalter/impots-cli ~/Documents/impots-cli
 uv run ~/Documents/claudine/scripts/link_clis.py   # met `impots` sur le PATH
-impots login                                        # connecte-toi dans la fenêtre
+impots connect                                      # ouvre la fenêtre ; connecte-toi dedans
 ```
 
 Il faut [uv](https://docs.astral.sh/uv/) et Google Chrome.
@@ -59,3 +62,9 @@ uv run --script tests/test_impots_cli.py
 ```
 
 Tests hors ligne, sur du HTML synthétique qui reproduit la structure des vraies pages.
+
+## Privacy Policy
+
+See https://clementwalter.github.io/claude-extensions/privacy/. The tool talks
+only to impots.gouv.fr, from a Chrome window on your machine, and writes only the
+files you ask it to download. It never stores your password.

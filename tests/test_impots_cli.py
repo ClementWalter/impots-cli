@@ -535,3 +535,43 @@ def test_send_without_confirmation_dialog_is_an_error(send_stubs, send_tab, monk
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+class SignedOutTab:
+    """A tab on the DGFiP login page: every logged-in check fails; records navigations."""
+
+    def __init__(self):
+        self.visited = []
+
+    def navigate(self, url, timeout=30):
+        self.visited.append(url)
+        return url
+
+    def call(self, method, params=None):
+        return {}
+
+
+@pytest.fixture
+def signed_out(monkeypatch):
+    tab = SignedOutTab()
+    monkeypatch.setattr(ic, "open_tab", lambda ctx: tab)
+
+    def not_logged(t):
+        raise click.ClickException(ic.NOT_LOGGED)
+    monkeypatch.setattr(ic, "ensure_on_site", not_logged)
+    return tab
+
+
+def test_connect_signed_out_reports_next_step(signed_out):
+    assert json.loads(CliRunner().invoke(ic.cli, ["connect", "--json"]).output)["connected"] is False
+
+
+def test_connect_signed_out_opens_login_page(signed_out):
+    CliRunner().invoke(ic.cli, ["connect"])
+    assert signed_out.visited == [ic.HOME_URL]
+
+
+@pytest.mark.parametrize("value,expected", [("", ""), ("${user_config.download_dir}", ""), (" /tmp/x ", "/tmp/x")])
+def test_env_value(monkeypatch, value, expected):
+    monkeypatch.setenv("IMPOTS_TEST_VAR", value)
+    assert ic.env_value("IMPOTS_TEST_VAR") == expected

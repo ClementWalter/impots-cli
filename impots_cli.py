@@ -56,9 +56,18 @@ ORIGIN = "https://cfspart.impots.gouv.fr"
 HOME_URL = f"{ORIGIN}/enp/accueilensupres.do"
 DOCS_URL = f"{ORIGIN}/enp/documents.do?n=0"
 MSG_URL = f"{ORIGIN}/gaia2-zu-mapi/pages/part/portailpart.xhtml"
-DEFAULT_CDP = os.environ.get("IMPOTS_CDP_URL") or "http://localhost:9224"
-PROFILE_DIR = Path(os.environ.get("IMPOTS_CHROME_PROFILE") or Path.home() / ".impots-chrome")
-DOWNLOAD_DIR = Path.home() / "Downloads" / "impots"
+
+
+def env_value(name: str) -> str:
+    """An env var, treating an unfilled extension setting (`${user_config.x}`) as unset."""
+    value = os.environ.get(name, "").strip()
+    return "" if value.startswith("${") else value
+
+
+DEFAULT_CDP = env_value("IMPOTS_CDP_URL") or "http://localhost:9224"
+PROFILE_DIR = Path(env_value("IMPOTS_CHROME_PROFILE") or Path.home() / ".impots-chrome")
+# The extension's Download folder setting, else ~/Downloads/impots.
+DOWNLOAD_DIR = Path(env_value("IMPOTS_DOWNLOAD_DIR") or Path.home() / "Downloads" / "impots").expanduser()
 CHROME_PATHS = [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -70,7 +79,8 @@ MAX_ATTACH_BYTES = 20 * 1024 * 1024
 SEND_CHECKS = 5
 SEND_CHECK_DELAY = 3.0
 SEND_CONFIRM_BTN = "dlgFormValider:confirmerCreationDmdBtnDlg"
-NOT_LOGGED = "Not signed in to impots.gouv.fr — run `impots login` and sign in in the Chrome window it opens."
+NOT_LOGGED = ("Not signed in to impots.gouv.fr — run `impots connect` (the connect tool in Claude): it opens a "
+              "Chrome window on the login page; sign in there, then retry.")
 
 # Resolves once PrimeFaces' ajax queue is drained (the DOM is then up to date).
 WAIT_JS = """(async()=>{for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,250));
@@ -634,6 +644,34 @@ def login(ctx: click.Context, timeout: int) -> None:
             return
         time.sleep(2)
     raise click.ClickException(f"not signed in after {timeout} s; re-run `impots login`.")
+
+
+@cli.command(epilog="\b\nExamples:\n  impots connect\n  impots connect --json")
+@click.option("--json", "as_json", is_flag=True, help="JSON output.")
+@click.pass_context
+def connect(ctx: click.Context, as_json: bool) -> None:
+    """Open the dedicated Chrome on impots.gouv.fr and report whether it is signed in (returns at once).
+
+    When it is not, the window shows the login page: sign in there (numéro
+    fiscal + mot de passe, or FranceConnect), then run any command.
+    """
+    tab = open_tab(ctx)
+    try:
+        ensure_on_site(tab)
+        home = parse_home(tab.ev("(async()=>await (await fetch('/enp/accueilensupres.do')).text())()"))
+    except click.ClickException:
+        home = None
+        tab.navigate(HOME_URL)
+        tab.call("Page.bringToFront")
+    data = {
+        "connected": home is not None,
+        "name": (home or {}).get("name"),
+        "unread_messages": (home or {}).get("unread_messages"),
+        "next": None if home else "Sign in in the Chrome window that just opened on the impots.gouv.fr login page "
+                                  "(numéro fiscal + mot de passe, or FranceConnect), then ask again.",
+    }
+    emit(data, as_json, lambda d: click.echo(
+        f"connected\t{d['name']}" if d["connected"] else f"not signed in\t{d['next']}"))
 
 
 @cli.command(epilog="\b\nExamples:\n  impots whoami\n  impots whoami --json")

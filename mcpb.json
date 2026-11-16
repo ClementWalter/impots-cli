@@ -1,0 +1,24 @@
+{
+  "display_name": "Impôts",
+  "description": "Read your impots.gouv.fr space from Claude: every tax document as PDF, and the secure messaging with your tax office.",
+  "long_description": "Reads your impots.gouv.fr espace particulier as you: every document of the Documents page, all years (avis d'impôt, déclarations, taxes foncières and d'habitation, relances), which it saves to your Mac as PDF, and the messagerie sécurisée (your threads with the tax office, their attachments and acknowledgements of receipt). It can also write a new message to your tax office with attachments, after showing you the filled form.\n\nSetup:\n1. Install Google Chrome if you do not have it.\n2. In Claude, ask: \"connect my impots.gouv.fr account\". A separate Chrome window opens on the login page: sign in there with your numéro fiscal and password, or with FranceConnect.\n3. Then ask for example \"download all my avis d'impôt\", \"do I have new messages from the tax office?\" or \"write to my tax office about my taxe foncière\".\n\nimpots.gouv.fr blocks requests that do not come from a real browser, so the extension works through that dedicated Chrome window (its own profile, separate from your usual browser). Keep it open while you use the extension. The tax site signs you out quickly when idle: if Claude says you are not signed in, ask it to connect again and sign in in the window. Your password is never seen or stored by the extension. Opening a thread marks it as read on the site. Files are saved in the Download folder from this extension's settings (Downloads/impots by default).",
+  "platforms": ["darwin"],
+  "env": {
+    "IMPOTS_DOWNLOAD_DIR": "${user_config.download_dir}"
+  },
+  "user_config": {
+    "download_dir": {
+      "type": "directory",
+      "title": "Download folder",
+      "description": "Where tax documents and message attachments are saved.",
+      "default": "~/Downloads/impots",
+      "required": false
+    }
+  },
+  "site": {
+    "group": "home",
+    "rank": 50,
+    "needs": ["An impots.gouv.fr account (numéro fiscal or FranceConnect)", "Google Chrome installed"],
+    "risk": "unofficial-api"
+  }
+}

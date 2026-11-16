@@ -17,24 +17,26 @@ No credential is stored. The CLI drives a dedicated Chrome (profile
 session cookies and the trusted-device state between runs.
 
 - Not signed in → every command fails with
-  ``Not signed in to impots.gouv.fr — run `impots login` …``.
-- `impots login` opens the window on the login page and waits (default 300 s) until
-  the person signs in (numéro fiscal + mot de passe, or FranceConnect). The person
-  types the password; an agent never does.
+  ``Not signed in to impots.gouv.fr — run `impots connect` …``.
+- `impots connect` opens the window on the login page and returns at once with
+  `"connected": false`; ask the person to sign in there (numéro fiscal + mot de
+  passe, or FranceConnect), then retry. The person types the password; an agent
+  never does. In a terminal, `impots login` does the same and waits (300 s).
 - The DGFiP session expires quickly when idle (observed: gone within the same
   working session, exact duration not measured), so expect to ask the user for
-  `! impots login` before most runs.
+  `impots connect` (or `! impots login`) before most runs.
 
 ## Output conventions
 
 - Default: one line per record, the id needed by the next command last, after a TAB.
 - `--json`: normalized JSON (ISO dates, stable keys). Progress and warnings go to stderr.
-- Files go to `~/Downloads/impots/` by default; paths printed are absolute.
+- Files go to `$IMPOTS_DOWNLOAD_DIR`, else `~/Downloads/impots/`; paths printed are absolute.
 
 ## Commands
 
 ```bash
 # Read
+impots connect --json                      # open the window; signed in or not (returns at once)
 impots whoami                              # name, numéro fiscal, unread message count
 impots documents                           # every document, all years (id last)
 impots documents --year 2026 --json
