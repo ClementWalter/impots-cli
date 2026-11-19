@@ -393,6 +393,13 @@ def check_attachments(paths: list[Path]) -> None:
         raise click.BadParameter(f"attachments total {total / 1e6:.1f} MB > 20 MB limit", param_hint="--attach")
 
 
+def check_demande_id(demande_id: str) -> None:
+    """Demande ids are numbers (N° 1234567890); they end up in page JavaScript."""
+    if not re.fullmatch(r"[0-9]+", demande_id):
+        raise click.BadParameter(f"{demande_id!r}: a demande id is digits only; list ids with `impots messages`.",
+                                 param_hint="IDS")
+
+
 # ---------------------------------------------------------------------------
 # CDP plumbing
 # ---------------------------------------------------------------------------
@@ -560,6 +567,7 @@ def load_all_demandes(tab: Tab) -> list[dict]:
 
 def goto_demande(tab: Tab, demande_id: str) -> None:
     """Show the page holding a demande and expand its row."""
+    check_demande_id(demande_id)
     for _ in range(50):
         found = tab.ev(f"""(()=>{{const tr=document.querySelector('tr[data-rk="{demande_id}"]');
             if(!tr) return null; const a=tr.querySelector('a[id$=":numDemande"]');
@@ -811,6 +819,8 @@ def message(ctx, ids, save: bool, out_dir: Path, as_json: bool) -> None:
 
     Opening a demande marks its replies as read on the site.
     """
+    for did in ids:
+        check_demande_id(did)
     tab = open_tab(ctx)
     open_messagerie(tab)
     threads = []
