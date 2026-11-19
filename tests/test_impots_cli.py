@@ -382,6 +382,16 @@ def test_attachment_total_size(tmp_path, monkeypatch):
         ic.check_attachments([f, f])
 
 
+@pytest.mark.parametrize("did", ["", "12a", "1 2", "1\"]", "../1", "\u0661\u0662"])
+def test_demande_id_refused(did):
+    with pytest.raises(click.BadParameter, match="digits only"):
+        ic.check_demande_id(did)
+
+
+def test_demande_id_accepted():
+    ic.check_demande_id("1234567890")
+
+
 @pytest.mark.parametrize(("cd", "name"), [
     ("attachment;filename=\"RIB%20SIP.pdf\"; filename*=UTF-8''RIB%20SIP.pdf", "RIB SIP.pdf"),
     ('inline;filename=Avis_2026.pdf', "Avis_2026.pdf"),
@@ -401,6 +411,12 @@ def test_download_requires_a_selection():
 def test_send_requires_one_body():
     res = CliRunner().invoke(ic.cli, ["--no-launch", "send", "--topic", "14"])
     assert "exactly one of --body or --body-file" in res.output
+
+
+def test_message_rejects_bad_id_before_browser(monkeypatch):
+    monkeypatch.setattr(ic, "open_tab", lambda ctx: pytest.fail("browser reached"))
+    res = CliRunner().invoke(ic.cli, ["--no-launch", "message", "1234567890", "1'x"])
+    assert res.exit_code == 2 and "digits only" in res.output
 
 
 def test_no_chrome_names_the_fix(monkeypatch):
